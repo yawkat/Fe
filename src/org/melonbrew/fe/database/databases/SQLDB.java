@@ -5,6 +5,7 @@ import org.melonbrew.fe.database.Account;
 import org.melonbrew.fe.database.Database;
 
 import java.sql.Connection;
+import java.sql.Statement;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -50,7 +51,9 @@ public abstract class SQLDB extends Database {
             public void run() {
                 try {
                     if (connection != null && !connection.isClosed()) {
-                        connection.createStatement().execute("/* ping */ SELECT 1");
+                        Statement statement = connection.createStatement();
+                        statement.execute("/* ping */ SELECT 1");
+                        statement.close();
                     }
                 } catch (SQLException e) {
                     connection = getNewConnection();
@@ -95,11 +98,13 @@ public abstract class SQLDB extends Database {
                     return false;
                 }
 
-                ResultSet set = connection.prepareStatement(supportsModification ? ("SHOW TABLES LIKE '" + accountsName + "'") : "SELECT name FROM sqlite_master WHERE type='table' AND name='" + accountsName + "'").executeQuery();
+                PreparedStatement statement = connection.prepareStatement(supportsModification ? ("SHOW TABLES LIKE '" + accountsName + "'") : "SELECT name FROM sqlite_master WHERE type='table' AND name='" + accountsName + "'");
+                ResultSet set = statement.executeQuery();
 
                 boolean newDatabase = set.next();
 
                 set.close();
+                statement.close();
 
                 query("CREATE TABLE IF NOT EXISTS " + accountsName + " (" + accountsColumnUser + " varchar(64) NOT NULL, " + accountsColumnUUID + " varchar(36), " + accountsColumnMoney + " double NOT NULL)");
 
@@ -143,7 +148,10 @@ public abstract class SQLDB extends Database {
     protected abstract Connection getNewConnection();
 
     public boolean query(String sql) throws SQLException {
-        return connection.createStatement().execute(sql);
+        Statement statement = connection.createStatement();
+        boolean b = statement.execute(sql);
+        statement.close();
+        return b;
     }
 
     public void close() {
@@ -163,13 +171,15 @@ public abstract class SQLDB extends Database {
         int version = 0;
 
         try {
-            ResultSet set = connection.prepareStatement("SELECT * from " + versionName).executeQuery();
+            PreparedStatement statement = connection.prepareStatement("SELECT * from " + versionName);
+            ResultSet set = statement.executeQuery();
 
             if (set.next()) {
                 version = set.getInt("version");
             }
 
             set.close();
+            statement.close();
 
             return version;
         } catch (Exception e) {
@@ -183,9 +193,13 @@ public abstract class SQLDB extends Database {
         checkConnection();
 
         try {
-            connection.prepareStatement("DELETE FROM " + versionName).executeUpdate();
+            PreparedStatement st = connection.prepareStatement("DELETE FROM " + versionName);
+            st.executeUpdate();
+            st.close();
 
-            connection.prepareStatement("INSERT INTO " + versionName + " (version) VALUES (" + version + ")").executeUpdate();
+            st = connection.prepareStatement("INSERT INTO " + versionName + " (version) VALUES (" + version + ")");
+            st.executeUpdate();
+            st.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -199,7 +213,8 @@ public abstract class SQLDB extends Database {
         List<Account> topAccounts = new ArrayList<Account>();
 
         try {
-            ResultSet set = connection.createStatement().executeQuery(sql);
+            Statement statement = connection.createStatement();
+            ResultSet set = statement.executeQuery(sql);
 
             while (set.next()) {
                 Account account = new Account(plugin, set.getString(accountsColumnUser), set.getString(accountsColumnUUID), this);
@@ -208,6 +223,8 @@ public abstract class SQLDB extends Database {
 
                 topAccounts.add(account);
             }
+            set.close();
+            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -221,7 +238,8 @@ public abstract class SQLDB extends Database {
         List<Account> accounts = new ArrayList<Account>();
 
         try {
-            ResultSet set = connection.createStatement().executeQuery("SELECT * from " + accountsName);
+            Statement statement = connection.createStatement();
+            ResultSet set = statement.executeQuery("SELECT * from " + accountsName);
 
             while (set.next()) {
                 Account account = new Account(plugin, set.getString(accountsColumnUser), set.getString(accountsColumnUUID), this);
@@ -230,6 +248,8 @@ public abstract class SQLDB extends Database {
 
                 accounts.add(account);
             }
+            statement.close();
+            set.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -255,6 +275,7 @@ public abstract class SQLDB extends Database {
             }
 
             set.close();
+            statement.close();
 
             return money;
         } catch (SQLException e) {
@@ -276,6 +297,7 @@ public abstract class SQLDB extends Database {
             statement.setString(1, uuid != null ? uuid : name);
 
             statement.execute();
+            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -307,6 +329,8 @@ public abstract class SQLDB extends Database {
             }
 
             if (statement.executeUpdate() == 0) {
+                statement.close();
+
                 statement = connection.prepareStatement("INSERT INTO " + accountsName + " (" + accountsColumnUser + ", " + accountsColumnUUID + ", " + accountsColumnMoney + ") VALUES (?, ?, ?)");
 
                 statement.setString(1, name);
@@ -317,6 +341,8 @@ public abstract class SQLDB extends Database {
 
                 statement.execute();
             }
+
+            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -327,7 +353,8 @@ public abstract class SQLDB extends Database {
         checkConnection();
 
         try {
-            ResultSet set = connection.prepareStatement("SELECT * from " + accountsName + " WHERE " + accountsColumnMoney + "=" + plugin.getAPI().getDefaultHoldings()).executeQuery();
+            PreparedStatement statement = connection.prepareStatement("SELECT * from " + accountsName + " WHERE " + accountsColumnMoney + "=" + plugin.getAPI().getDefaultHoldings());
+            ResultSet set = statement.executeQuery();
 
             boolean executeQuery = false;
 
@@ -346,6 +373,7 @@ public abstract class SQLDB extends Database {
             }
 
             set.close();
+            statement.close();
 
             builder.delete(builder.length() - 2, builder.length()).append(")");
 
@@ -363,7 +391,9 @@ public abstract class SQLDB extends Database {
         checkConnection();
 
         try {
-            connection.prepareStatement("DELETE FROM " + accountsName).executeUpdate();
+            PreparedStatement statement = connection.prepareStatement("DELETE FROM " + accountsName);
+            statement.executeUpdate();
+            statement.close();
         } catch (SQLException e) {
             e.printStackTrace();
         }
